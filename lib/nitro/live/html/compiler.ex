@@ -15,13 +15,45 @@ defmodule Nitro.Live.HTML.Compiler do
       attr      := name "=" ("\"" literal "\"" | "{" expr "}") | name
       directive := ":if" "=" "{" expr "}"  |  ":for" "=" "{" pattern "<-" expr "}"
 
-  Not supported: HTML comments, `<script>`/`<style>` raw-text parsing,
-  `data-*`-style hyphenated attributes (nitro records don't have matching
-  field names for those), balanced-brace detection inside a nested string
-  literal that itself contains `}` (e.g. `{foo("}")}`  will mis-parse).
-  These are real, documented limitations of a hand-rolled parser, not
-  landmines -- a template hitting one raises a clear `CompileError` at the
-  offending point, not a silent wrong render.
+  `data-*` attributes work (`data-testid={...}` etc.) despite nitro records
+  having no matching field names for hyphenated names -- they're routed
+  into the element's generic `data_fields` field (a list of `{binary,
+  value}` pairs every element record carries, appended onto its normal
+  attributes by the element's own renderer) instead of being set as a
+  direct keyword key.
+
+  `<script>` and `<style>` are raw-text elements, same as real HTML5:
+  everything up to the literal, case-sensitive `</script>` or `</style>`
+  is one unescaped, unparsed text node -- no nested tags, no `{expr}`
+  interpolation at all inside them (a `{` in a `function() { ... }` body
+  would otherwise be parsed as the start of an expression, and JS/CSS
+  routinely contains `<`) -- rendered via `NITRO.literal(html_encode: false)`
+  so it reaches the DOM byte-for-byte, not HTML-entity-escaped like
+  ordinary text content is. A script/style tag that genuinely needs
+  assign-derived content can't be written as literal `<script>...</script>`
+  markup in `~H` at all -- build the whole element as a value instead (a
+  helper returning `NITRO.element(html_tag: "script", body: [NITRO.literal(body: ..., html_encode: false)])`,
+  for instance) and splice it in with `{that_helper(...)}` where the
+  `<script>` tag would have gone.
+
+  A `<script>` tag correctly compiled and rendered by this module still
+  will NOT execute when it arrives via `push_patch/2` -- verified for real
+  against a running server/browser: a `<style>` in a live patch DOES take
+  effect (browsers apply patched-in styles), but a `<script>` in the same
+  patch is inserted into the DOM inert, never run. This isn't a bug here;
+  it's standard browser behavior for anything inserted via `innerHTML`
+  (which is how `NitroLive.patch/2`'s `parse/1` -- and morphdom itself --
+  build the tree being patched in), a deliberate security measure, not
+  something specific to nitro or this compiler. A `<script>` in the
+  *initial* server-rendered HTML (the very first page load, before any
+  WebSocket connects) runs normally -- only ones arriving via a later live
+  patch don't.
+
+  Not supported: HTML comments, balanced-brace detection inside a nested
+  string literal that itself contains `}` (e.g. `{foo("}")}` will
+  mis-parse). These are real, documented limitations of a hand-rolled
+  parser, not landmines -- a template hitting one raises a clear
+  `CompileError` at the offending point, not a silent wrong render.
 
   `{expr}` in text position auto-escapes via `NITRO.literal/1`'s default
   `html_encode: true` (mirrors HEEx's own auto-escaping) *unless* the
@@ -39,6 +71,7 @@ defmodule Nitro.Live.HTML.Compiler do
   }
 
   @void_tags ~w(area base br col embed hr img input link meta param source track wbr)
+  @raw_text_tags ~w(script style)
 
   def compile(source, caller) do
     {nodes, rest} = parse_nodes(String.trim(source), [], nil)
@@ -78,11 +111,17 @@ defmodule Nitro.Live.HTML.Compiler do
   defp parse_nodes(<<"<", rest::binary>>, acc, close_tag) do
     {tag, attrs, self_closing?, after_open} = parse_open_tag(rest)
 
-    if self_closing? or tag in @void_tags do
-      parse_nodes(after_open, [{:tag, tag, attrs, []} | acc], close_tag)
-    else
-      {children, after_children} = parse_nodes(after_open, [], tag)
-      parse_nodes(after_children, [{:tag, tag, attrs, children} | acc], close_tag)
+    cond do
+      self_closing? or tag in @void_tags ->
+        parse_nodes(after_open, [{:tag, tag, attrs, []} | acc], close_tag)
+
+      tag in @raw_text_tags ->
+        {raw, after_close} = take_raw_text(after_open, tag)
+        parse_nodes(after_close, [{:tag, tag, attrs, [{:raw_text, raw}]} | acc], close_tag)
+
+      true ->
+        {children, after_children} = parse_nodes(after_open, [], tag)
+        parse_nodes(after_children, [{:tag, tag, attrs, children} | acc], close_tag)
     end
   end
 
@@ -102,6 +141,24 @@ defmodule Nitro.Live.HTML.Compiler do
 
   defp take_text(<<c::utf8, rest::binary>>, acc), do: take_text(rest, [<<c::utf8>> | acc])
   defp take_text("", acc), do: {IO.iodata_to_binary(Enum.reverse(acc)), ""}
+
+  # Raw text runs to the literal closing tag, not the balanced-tag
+  # recursion parse_nodes/3 uses for everything else -- a `<` or `{`
+  # inside a <script>/<style> body is just JS/CSS, never the start of a
+  # nested element or an interpolation.
+  defp take_raw_text(input, tag) do
+    closing = "</" <> tag
+
+    case :binary.match(input, closing) do
+      {pos, len} ->
+        raw = binary_part(input, 0, pos)
+        after_tag_name = binary_part(input, pos + len, byte_size(input) - pos - len)
+        {raw, skip_to_gt!(after_tag_name, tag)}
+
+      :nomatch ->
+        raise "Nitro.Live.HTML: unterminated <#{tag}> -- no matching </#{tag}> found"
+    end
+  end
 
   defp take_balanced(<<"}", rest::binary>>, 1, acc), do: {IO.iodata_to_binary(Enum.reverse(acc)), rest}
   defp take_balanced(<<"}", rest::binary>>, depth, acc), do: take_balanced(rest, depth - 1, ["}" | acc])
@@ -184,6 +241,14 @@ defmodule Nitro.Live.HTML.Compiler do
     quote do: NITRO.literal(body: unquote(String.to_charlist(text)))
   end
 
+  defp to_ast({:raw_text, text}, _caller) do
+    # html_encode: false -- unlike ordinary text (to_ast/2 for {:text, _}),
+    # <script>/<style> content must reach the DOM byte-for-byte: escaping
+    # it the normal way would corrupt JS/CSS source (`&amp;&amp;` is not
+    # the same program as `&&`).
+    quote do: NITRO.literal(body: unquote(String.to_charlist(text)), html_encode: false)
+  end
+
   defp to_ast({:expr, src}, caller) do
     ast = parse_expr!(src, caller)
     quote do: Nitro.Live.HTML.embed(unquote(ast))
@@ -199,7 +264,11 @@ defmodule Nitro.Live.HTML.Compiler do
   end
 
   defp build_node_ast(tag, attrs, children, caller) do
-    attrs_ast = Enum.map(attrs, &attr_to_ast(&1, caller))
+    {data_attrs, plain_attrs} =
+      attrs
+      |> Enum.map(&attr_to_ast(&1, caller))
+      |> Enum.split_with(&match?({:__data_field__, _}, &1))
+
     children_ast = Enum.map(children, &to_ast(&1, caller))
     body_ast = quote do: List.flatten(unquote(children_ast))
 
@@ -208,7 +277,7 @@ defmodule Nitro.Live.HTML.Compiler do
     # `[key: val, ...]` shape itself must be visible at compile time) -- so
     # this concatenation has to happen here, in the compiler, not as a
     # generated runtime `++` call, or NITRO.span/1 etc. reject it.
-    full_kw_ast = attrs_ast ++ [{:body, body_ast}]
+    full_kw_ast = plain_attrs ++ data_fields_kw(data_attrs) ++ [{:body, body_ast}]
 
     case Map.get(@tag_map, tag, tag_to_atom(tag)) do
       nil -> quote do: NITRO.element(unquote([{:html_tag, tag} | full_kw_ast]))
@@ -231,10 +300,29 @@ defmodule Nitro.Live.HTML.Compiler do
     if MapSet.member?(@known_tags, tag), do: String.to_atom(tag)
   end
 
-  defp attr_to_ast({name, {:string, value}}, _caller), do: {attr_atom(name), value}
-  defp attr_to_ast({name, {:expr, src}}, caller), do: {attr_atom(name), parse_expr!(src, caller)}
+  defp attr_to_ast({name, {:string, value}}, _caller), do: attr_pair(name, value)
+  defp attr_to_ast({name, {:expr, src}}, caller), do: attr_pair(name, parse_expr!(src, caller))
+
+  # `data-*` names have no matching nitro record field (attr_atom below
+  # would produce e.g. :"data-testid", which NITRO.span/1 etc. reject --
+  # record keys must be one of the record's own declared fields). Every
+  # element record has a generic `data_fields` field instead, a list of
+  # {binary, value} pairs an element's own renderer (element_button.erl
+  # etc., via wf_tags:display_property/1) appends onto its normal
+  # attribute list -- so route these there instead of trying to set them
+  # as a direct keyword key.
+  defp attr_pair(name, value_ast) do
+    if String.starts_with?(name, "data-") do
+      {:__data_field__, {name, value_ast}}
+    else
+      {attr_atom(name), value_ast}
+    end
+  end
 
   defp attr_atom(name), do: String.to_atom(name)
+
+  defp data_fields_kw([]), do: []
+  defp data_fields_kw(data_attrs), do: [{:data_fields, Enum.map(data_attrs, fn {:__data_field__, pair} -> pair end)}]
 
   defp pop_directive(attrs, directive_name) do
     case Enum.split_with(attrs, fn {name, _} -> name == directive_name end) do

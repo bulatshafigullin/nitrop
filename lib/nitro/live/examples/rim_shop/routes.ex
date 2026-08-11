@@ -22,14 +22,21 @@ defmodule Nitro.Live.Examples.RimShop.Routes do
   def finish(state, cx), do: {:ok, state, cx}
 
   @doc """
-  Parses the WS connect path (e.g. `/ws/rim-shop/r1`, carrying the
-  browser's `location.pathname` -- see `Cx`'s moduledoc) into which page to
-  mount and, for a product page, which rim id. A pure function so it's
-  testable without a real cowboy request.
+  Parses a path into which page to mount and, for a product page, which
+  rim id. A pure function so it's testable without a real cowboy request.
+
+  Handles two different shapes of "path" on purpose: the real WS connect
+  path (e.g. `/ws/rim-shop/r1`, carrying the browser's `location.pathname`
+  -- see `Cx`'s moduledoc) at connect time, and a plain `/rim-shop/r1`
+  (no `/ws` prefix -- that only exists because `n2o.js` prepends it to the
+  *connection* URL) coming from `Nitro.Live.Nav.path/1` on a live-navigate
+  click, which reuses this same connection. Matching on the last one or
+  two segments instead of anchoring at the start handles both without
+  needing two functions.
   """
   def route(path) do
-    case String.split(path, "/", trim: true) do
-      ["ws", "rim-shop", id] -> {:product, id}
+    case path |> String.split("/", trim: true) |> Enum.reverse() do
+      [id, "rim-shop" | _] -> {:product, id}
       _ -> {:catalog, nil}
     end
   end

@@ -83,6 +83,72 @@ defmodule Nitro.Live.HTMLTest do
       out = html(Runtime.render_root(id))
       assert out =~ ~s(class="sink")
     end
+
+    test "data-* attrs are routed into the element's generic data_fields, string and expr forms both" do
+      defmodule DataAttrs do
+        use Nitro.Live
+
+        def render(_assigns) do
+          ~H"""
+          <div data-testid="root" data-count={1 + 1}><span data-empty>hi</span></div>
+          """
+        end
+
+        def handle_event(_e, _p, s), do: s
+      end
+
+      out = DataAttrs.render(%{}) |> :wf_render.render() |> IO.iodata_to_binary()
+      assert out =~ ~s(data-testid="root")
+      assert out =~ ~s(data-count="2")
+      assert out =~ ~s(data-empty="true")
+    end
+  end
+
+  describe "raw-text elements (<script>/<style>)" do
+    defmodule RawText do
+      use Nitro.Live
+
+      def render(_assigns) do
+        ~H"""
+        <div>
+          <script>if (a < b && x > 1) { console.log("{not an expr}"); }</script>
+          <style>.foo { color: red; } .bar > .baz { margin: 0; }</style>
+          <p>ordinary text still {1 + 1}</p>
+        </div>
+        """
+      end
+
+      def handle_event(_e, _p, s), do: s
+    end
+
+    test "<script> content is passed through verbatim -- no nested-tag parsing, no {expr} interpolation" do
+      out = RawText.render(%{}) |> :wf_render.render() |> IO.iodata_to_binary()
+      assert out =~ "<script>if (a < b && x > 1) { console.log(\"{not an expr}\"); }</script>"
+    end
+
+    test "<style> content is passed through verbatim too" do
+      out = RawText.render(%{}) |> :wf_render.render() |> IO.iodata_to_binary()
+      assert out =~ "<style>.foo { color: red; } .bar > .baz { margin: 0; }</style>"
+    end
+
+    test "an ordinary tag right after a raw-text one still interpolates and escapes normally" do
+      out = RawText.render(%{}) |> :wf_render.render() |> IO.iodata_to_binary()
+      assert out =~ "<p>ordinary text still 2</p>"
+    end
+
+    test "an unterminated <script> raises a clear compile error, not a silent bad render" do
+      assert_raise RuntimeError, ~r/unterminated <script>/, fn ->
+        Code.compile_string("""
+        defmodule Nitro.Live.HTMLTest.BadScript do
+          use Nitro.Live
+          def render(_assigns) do
+            ~H"<div><script>if (a < b) {}</div>"
+          end
+          def handle_event(_e, _p, s), do: s
+        end
+        """)
+      end
+    end
   end
 
   describe "embedding a live component via {expr}" do

@@ -8,11 +8,18 @@ defmodule Nitro.Live.Examples.RimShop.Page do
   and read back here -- `CatalogPage` for `/rim-shop`, `ProductPage` for
   `/rim-shop/:id`. No session id threaded through, so no reconnect-persisted
   state -- see `Simple.Page` for that.
+
+  Also intercepts `Nitro.Live.Nav` live-navigate postbacks (`CatalogPage`'s
+  result links and `ProductPage`'s back link are both wired to `delegate:
+  __MODULE__` for exactly this) before falling through to the normal
+  `Dispatcher.event/1` path, mounting the new page under the same root id
+  and patching in place -- no reload, no reconnect, unlike the plain
+  `<a href>`-only navigation this page used before `Nav` existed.
   """
 
   require N2O
-  alias Nitro.Live.Runtime
-  alias Nitro.Live.Examples.RimShop.{CatalogPage, ProductPage}
+  alias Nitro.Live.{Runtime, Nav}
+  alias Nitro.Live.Examples.RimShop.{CatalogPage, ProductPage, Routes}
 
   # Must match priv/static/live.htm's placeholder <div id="root"> -- the
   # client's NitroLive.patch/2 targets this id and no-ops (silently, no
@@ -20,21 +27,28 @@ defmodule Nitro.Live.Examples.RimShop.Page do
   @root_id "root"
 
   def event(:init) do
-    {module, params} =
-      case route() do
-        {:catalog, nil} -> {CatalogPage, %{}}
-        {:product, id} -> {ProductPage, %{item_id: id}}
-      end
-
-    Runtime.mount(module, @root_id, params)
+    mount(route_params())
     tree = Runtime.render_root(@root_id)
     Runtime.push_patch(@root_id, tree)
     []
   end
 
-  def event(other), do: Nitro.Live.Dispatcher.event(other)
+  def event(postback) do
+    case Nav.path(postback) do
+      {:ok, path} ->
+        mount(Routes.route(path))
+        Nav.push_navigate(@root_id, path, Runtime.render_root(@root_id))
+        []
 
-  defp route do
+      :error ->
+        Nitro.Live.Dispatcher.event(postback)
+    end
+  end
+
+  defp mount({:catalog, nil}), do: Runtime.mount(CatalogPage, @root_id)
+  defp mount({:product, id}), do: Runtime.mount(ProductPage, @root_id, %{item_id: id})
+
+  defp route_params do
     context = :erlang.get(:context)
     N2O.cx(context, :params)
   end

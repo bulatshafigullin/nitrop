@@ -13,20 +13,21 @@ defmodule Nitro.Live.Examples.RimShop.CatalogPage do
   groups.
 
   One of two real, separately-URLed pages (see `Nitro.Live.Examples.RimShop.ProductPage`
-  and `Routes`/`Page`/`Cx` for how the path gets here) -- a result is a
-  plain `<a href="/rim-shop/{id}">`, not a postback, so clicking it is a
-  genuine browser navigation: new HTTP request, new WS connection, a fresh
-  `mount/2` on the other end. That also means filters here are NOT
-  preserved when navigating to a product and back (no session id is
-  threaded through this demo's `Runtime.mount/2` -- see `Page`), unlike the
-  `simple/` examples' reconnect-persistence feature. That's the honest
-  trade-off of real multi-page navigation over the single-process,
-  view-switching approach an earlier version of this example used.
+  and `Routes`/`Page`/`Cx` for how the path gets here). A result is an
+  `<a href="/rim-shop/{id}">` wired as a `Nitro.Live.Nav` live-navigate
+  link -- clicking it stays on the same WebSocket connection/process (no
+  reload, no reconnect: `Page.event/1` intercepts it, mounts `ProductPage`
+  under the same root id, and patches in place), while right-click/open in
+  a new tab/no-JS still work off the real `href`. Filters here are still
+  NOT preserved across a trip to a product and back -- `Page` always does
+  a fresh `Runtime.mount/2` for whichever page a path resolves to, live-nav
+  or not (no session id threaded through this demo -- see `Page`), unlike
+  the `simple/` examples' reconnect-persistence feature.
   """
 
   use Nitro.Live
-  alias Nitro.Live.Socket
-  alias Nitro.Live.Examples.RimShop.Catalog
+  alias Nitro.Live.{Socket, Nav}
+  alias Nitro.Live.Examples.RimShop.{Catalog, Page}
 
   @empty_filters %{brand: MapSet.new(), size: MapSet.new(), color: MapSet.new()}
 
@@ -69,7 +70,12 @@ defmodule Nitro.Live.Examples.RimShop.CatalogPage do
         <p class="count">{length(@results)} rim(s)</p>
         <ul>
           <li :for={item <- @results} class="rim">
-            <a class="rim-link" href={"/rim-shop/" <> item.id}>
+            <a
+              class="rim-link"
+              href={"/rim-shop/" <> item.id}
+              postback={Nav.live_navigate(@live_id, "/rim-shop/" <> item.id)}
+              delegate={Page}
+            >
               <span class="name">{item.brand} {item.name}</span>
               <span class="spec">{item.size} in - {item.color}</span>
               <span class="price">${item.price}</span>

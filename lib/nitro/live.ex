@@ -39,7 +39,16 @@ defmodule Nitro.Live do
   """
   @callback update(params :: map, socket :: Socket.t()) :: Socket.t()
 
-  @optional_callbacks update: 2
+  @doc """
+  Called by `Nitro.Live.Runtime.dispatch_info/2` when a `Nitro.Live.PubSub`
+  broadcast this id is subscribed to arrives -- the `handle_info/2`
+  equivalent, for messages that didn't come from this connection's own
+  client at all. Default: ignore the message, keep state as-is (a module
+  that never subscribes to anything never needs this).
+  """
+  @callback handle_info(message :: term, socket :: Socket.t()) :: Socket.t()
+
+  @optional_callbacks update: 2, handle_info: 2
 
   defmacro __using__(_opts) do
     quote do

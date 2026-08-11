@@ -12,11 +12,20 @@ defmodule Nitro.Live.Examples.Simple.Dashboard do
   while the field is focused and holds unsaved typing, and the server's
   ever-changing value must NOT clobber it (see TODO.md).
 
-  And embeds `Nitro.Live.Examples.Simple.HeexCounter`, a component authored with
-  `~H` instead of hand-written `NITRO.panel(...)` calls, proving the two
-  authoring styles interoperate for real -- same postback wiring, same
+  Embeds `Nitro.Live.Examples.Simple.HeexCounter`, a component authored
+  with `~H` instead of hand-written `NITRO.panel(...)` calls, proving the
+  two authoring styles interoperate for real -- same postback wiring, same
   scoped `push_patch/2`, in the same running server/browser as everything
   else on this page.
+
+  Also embeds `Nitro.Live.Examples.Simple.ContactForm` -- `Nitro.Live.Form`'s
+  submit-style (several fields collected via one button's `source:`) and
+  change-tracking (`Form.live_change/4`, fires on every keystroke)
+  capabilities, exercised for real in the same running server/browser.
+
+  And `Nitro.Live.Examples.Simple.SharedCounter` -- `Nitro.Live.PubSub`
+  broadcasting to every OTHER open connection, not just this dashboard's
+  own subtree; open this page in two tabs and +1 in one to see it.
   """
 
   use Nitro.Live
@@ -40,6 +49,8 @@ defmodule Nitro.Live.Examples.Simple.Dashboard do
         Runtime.component(Nitro.Live.Examples.Simple.Toggle, "toggle-a", %{on: false}),
         Runtime.component(Nitro.Live.Examples.Simple.Toggle, "toggle-b", %{on: true}),
         Runtime.component(Nitro.Live.Examples.Simple.HeexCounter, "heex-counter", %{}),
+        Runtime.component(Nitro.Live.Examples.Simple.ContactForm, "contact-form", %{}),
+        Runtime.component(Nitro.Live.Examples.Simple.SharedCounter, "shared-counter", %{}),
         textbox(
           id: "note-input",
           # #textbox.disabled defaults to `undefined`, not `[]` -- and

@@ -1,11 +1,20 @@
 defmodule Nitro.Live.RimShopTest do
   use ExUnit.Case, async: true
 
-  alias Nitro.Live.Runtime
-  alias Nitro.Live.Examples.RimShop.{Catalog, CatalogPage, ProductPage, Routes}
+  alias Nitro.Live.{Runtime, Nav}
+  alias Nitro.Live.Examples.RimShop.{Catalog, CatalogPage, ProductPage, Page, Routes}
 
   defp uid(prefix), do: "#{prefix}-#{System.unique_integer([:positive])}"
   defp html(tree), do: tree |> :wf_render.render() |> IO.iodata_to_binary()
+
+  defp wire_js do
+    actions = :nitro.actions()
+    :nitro.actions([])
+    first = :nitro.render(actions)
+    second = :nitro.render(:nitro.actions())
+    :nitro.actions([])
+    IO.iodata_to_binary([first, second])
+  end
 
   describe "Catalog.filter/2" do
     test "no filters returns every item" do
@@ -76,8 +85,65 @@ defmodule Nitro.Live.RimShopTest do
       assert Routes.route("/ws/rim-shop") == {:catalog, nil}
     end
 
-    test "/ws/rim-shop/<id> routes to that product" do
+    test "/ws/rim-shop/<id> (the real WS-connect-time shape) routes to that product" do
       assert Routes.route("/ws/rim-shop/r7") == {:product, "r7"}
+    end
+
+    test "/rim-shop (the live-navigate shape, no /ws prefix) routes to the catalog" do
+      assert Routes.route("/rim-shop") == {:catalog, nil}
+    end
+
+    test "/rim-shop/<id> (the live-navigate shape) routes to that product" do
+      assert Routes.route("/rim-shop/r7") == {:product, "r7"}
+    end
+  end
+
+  describe "Nav.path/1 -- recognizing a live-navigate postback" do
+    test "extracts the path from a postback built by live_navigate/2" do
+      postback = Nav.live_navigate("root", "/rim-shop/r7")
+      assert Nav.path(postback) == {:ok, "/rim-shop/r7"}
+    end
+
+    test "anything else is :error, so Page.event/1 falls through to Dispatcher" do
+      assert Nav.path({:toggle_facet, :brand, "BBS"}) == :error
+      assert Nav.path(:clear_filters) == :error
+    end
+  end
+
+  describe "Page.event/1 -- live navigation, same connection, no reload" do
+    setup do
+      require N2O
+      # params: {:catalog, nil} mirrors what Routes.init/2 would have set
+      # for a request to /rim-shop -- Page.event(:init) reads it from here.
+      Process.put(:context, N2O.cx(params: {:catalog, nil}))
+      :nitro.actions([])
+      :ok
+    end
+
+    test "a live-navigate postback to a product mounts ProductPage under the same root id and pushState's the URL" do
+      Page.event(:init)
+      :nitro.actions([])
+
+      postback = Nav.live_navigate("root", "/rim-shop/r7")
+      Page.event(postback)
+
+      js = wire_js()
+      assert js =~ "history.pushState({}, \"\", \"/rim-shop/r7\")"
+      assert js =~ "NitroLive.patch(\"root\","
+      assert js =~ "Enkei RPF1"
+      refute js =~ "facet-group"
+    end
+
+    test "a live-navigate postback back to the catalog mounts CatalogPage under the same root id" do
+      Page.event(:init)
+      :nitro.actions([])
+      Page.event(Nav.live_navigate("root", "/rim-shop/r7"))
+      :nitro.actions([])
+
+      Page.event(Nav.live_navigate("root", "/rim-shop"))
+      js = wire_js()
+      assert js =~ "history.pushState({}, \"\", \"/rim-shop\")"
+      assert js =~ "#{length(Catalog.all())} rim(s)"
     end
   end
 

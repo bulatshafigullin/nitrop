@@ -1,7 +1,9 @@
 defmodule Nitro.Live.Examples.RimShop.ProductPage do
   @moduledoc """
-  Single-rim product detail page: SKU, specs, price, description, and a
-  real `<a href="/rim-shop">` link back -- the other half of the
+  Single-rim product detail page: SKU, specs, price, description, and an
+  `<a href="/rim-shop">` link back, wired as a `Nitro.Live.Nav`
+  live-navigate link (same connection, no reload -- see `CatalogPage`'s
+  moduledoc) -- the other half of the
   `Nitro.Live.Examples.RimShop.CatalogPage` <-> here multi-page pair (see
   `Routes`/`Page`/`Cx` for how the URL routes to this module instead of
   the catalog). `mount/2` takes the rim id from `params.item_id`, which
@@ -9,8 +11,8 @@ defmodule Nitro.Live.Examples.RimShop.ProductPage do
   """
 
   use Nitro.Live
-  alias Nitro.Live.Socket
-  alias Nitro.Live.Examples.RimShop.Catalog
+  alias Nitro.Live.{Socket, Nav}
+  alias Nitro.Live.Examples.RimShop.{Catalog, Page}
 
   @impl true
   def mount(%{item_id: item_id}, socket), do: Socket.assign(socket, :item, Catalog.find(item_id))
@@ -19,7 +21,7 @@ defmodule Nitro.Live.Examples.RimShop.ProductPage do
   def render(assigns) do
     ~H"""
     <div class="detail">
-      <a class="back" href="/rim-shop">‹ Back to results</a>
+      <a class="back" href="/rim-shop" postback={Nav.live_navigate(@live_id, "/rim-shop")} delegate={Page}>‹ Back to results</a>
       <h2>{@item.brand} {@item.name}</h2>
       <p class="sku">SKU: {Catalog.sku(@item)}</p>
       <ul class="specs">

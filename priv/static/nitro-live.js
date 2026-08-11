@@ -107,5 +107,14 @@ const NitroLive = {
   },
 };
 
-if (typeof window !== "undefined") window.NitroLive = NitroLive;
+if (typeof window !== "undefined") {
+  window.NitroLive = NitroLive;
+  // Nitro.Live.Nav's live-navigate updates the URL via history.pushState
+  // without a network request, so back/forward (popstate) has nothing to
+  // intercept server-side -- reconstructing a validly-pickled postback
+  // entirely client-side (real Erlang External Term Format + zlib, not
+  // just JSON) is out of scope, so this is a real reload instead. Correct
+  // (right content for the URL) but not "live" -- see Nav's moduledoc.
+  window.addEventListener("popstate", () => window.location.reload());
+}
 export default NitroLive;

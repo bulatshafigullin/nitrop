@@ -30,7 +30,11 @@ defmodule Nitro.Live.Examples.Simple.Server do
     Application.put_env(:n2o, :port, port)
     Application.put_env(:n2o, :app, :nitro)
     Application.put_env(:n2o, :routes, Nitro.Live.Examples.Simple.Routes)
-    Application.put_env(:n2o, :protocols, [:n2o_heart, :nitro_n2o])
+    # Nitro.Live.PubSub.Protocol handles the {:nitro_live_broadcast, ...}
+    # messages Nitro.Live.PubSub.broadcast/2 sends -- without it in this
+    # list, a broadcast still runs (nothing errors), it just never reaches
+    # any browser. See its moduledoc.
+    Application.put_env(:n2o, :protocols, [:n2o_heart, :nitro_n2o, Nitro.Live.PubSub.Protocol])
     Application.put_env(:n2o, :session, :n2o_session)
     Application.put_env(:n2o, :formatter, :n2o_bert)
     Application.put_env(:n2o, :origin, "*")

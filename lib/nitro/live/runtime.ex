@@ -126,6 +126,59 @@ defmodule Nitro.Live.Runtime do
   end
 
   @doc """
+  Like `dispatch/3`, but for a `Nitro.Live.PubSub` broadcast landing on an
+  already-mounted `id` instead of a client postback -- routes to the live
+  module's *optional* `handle_info/2` (skipped, `:unchanged`, if the module
+  doesn't define one; same `function_exported?/3` check `update/2` gets),
+  with the same change-tracking and crash isolation as `dispatch/3`. See
+  `Nitro.Live.PubSub.Protocol`, the only caller -- a broadcast arrives on
+  the connection process asynchronously (cowboy's `websocket_info/2`), not
+  as part of handling any particular client request.
+
+  Unlike `dispatch/3`, an unmounted `id` is treated as `:unchanged` rather
+  than raising: `Nitro.Live.PubSub`'s subscriber list can genuinely
+  outlive one particular subscribed id being unmounted/GC'd (see its
+  moduledoc), and a broadcast can carry several ids at once -- one stale
+  entry shouldn't stop the rest of a connection's subscribers from getting
+  patched.
+  """
+  def dispatch_info(id, message) do
+    case Process.get({__MODULE__, id}) do
+      nil ->
+        :unchanged
+
+      socket ->
+        dispatch_info_mounted(id, message, socket)
+    end
+  end
+
+  defp dispatch_info_mounted(id, message, socket) do
+    if function_exported?(socket.module, :handle_info, 2) do
+      try do
+        new_socket = socket.module.handle_info(message, socket)
+        put_socket(new_socket)
+
+        if new_socket.assigns == socket.assigns do
+          :unchanged
+        else
+          {:changed, render_scoped(new_socket)}
+        end
+      rescue
+        error ->
+          Logger.error(
+            "Nitro.Live.Runtime: handle_info/render crashed id=#{inspect(id)} " <>
+              "message=#{inspect(message)}\n" <>
+              Exception.format(:error, error, __STACKTRACE__)
+          )
+
+          :unchanged
+      end
+    else
+      :unchanged
+    end
+  end
+
+  @doc """
   Renders `tree` to HTML and wires a call to the client-side `NitroLive.patch/2`
   (see `priv/static/nitro-live.js`), which morphdom-diffs it into the live DOM
   in place -- instead of `nitro:update/2`'s full `outerHTML` replace, this
