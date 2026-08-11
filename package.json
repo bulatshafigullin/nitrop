@@ -1,0 +1,12 @@
+{
+  "name": "nitro-live-client",
+  "private": true,
+  "type": "module",
+  "description": "Client-side DOM patch adapter for Nitro.Live (vendored morphdom + tests)",
+  "scripts": {
+    "test": "node --test test/js/*.test.mjs"
+  },
+  "devDependencies": {
+    "jsdom": "^30.0.1"
+  }
+}

@@ -1,0 +1,32 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Nitro.Live Demo</title>
+</head>
+<body>
+<div id="root">mounting&hellip;</div>
+
+<script>
+// bullet.js isn't vendored -- its client API is a deliberate drop-in for the
+// native WebSocket (onopen/onmessage/onclose/send), so n2o.js works
+// unmodified against a real WebSocket. binaryType must be arraybuffer for
+// $bert.on's ArrayBuffer check in n2o.js.
+function bullet(url) {
+  var ws = new WebSocket(url);
+  ws.binaryType = "arraybuffer";
+  return ws;
+}
+</script>
+<script src="/n2o/utf8.js"></script>
+<script src="/n2o/bert.js"></script>
+<script src="/n2o/ieee754.js"></script>
+<script src="/n2o/heart.js"></script>
+<script src="/n2o/n2o.js"></script>
+<script src="/nitro-js/nitro.js"></script>
+<script>host = location.hostname; port = location.port; debug = true;</script>
+<script type="module" src="/static/nitro-live.js"></script>
+<script type="module">protos = [$bert]; N2O_start();</script>
+</body>
+</html>

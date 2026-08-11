@@ -8,9 +8,13 @@ defmodule NITRO.Mixfile do
       description: "NITRO Nitrogen Web Framework",
       package: package(),
       deps: deps(),
-      erlc_options: [:nowarn_export_all, :nowarn_deprecated_function]
+      erlc_options: [:nowarn_export_all, :nowarn_deprecated_function],
+      elixirc_paths: elixirc_paths(Mix.env())
     ]
   end
+
+  defp elixirc_paths(:test), do: ["lib", "test/support"]
+  defp elixirc_paths(_), do: ["lib"]
 
   def application do
     [mod: {:nitro, []}]
@@ -27,6 +31,10 @@ defmodule NITRO.Mixfile do
   end
 
   def deps do
-    [{:ex_doc, ">= 0.0.0", only: :dev, runtime: false}]
+    [
+      {:ex_doc, ">= 0.0.0", only: :dev, runtime: false},
+      {:n2o, "~> 13.4"},
+      {:cowboy, "~> 2.10"}
+    ]
   end
 end

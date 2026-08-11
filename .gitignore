@@ -5,3 +5,4 @@ doc
 .DS_Store
 *.lock
 tmp*
+node_modules/
