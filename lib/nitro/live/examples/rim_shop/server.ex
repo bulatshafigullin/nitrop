@@ -22,13 +22,19 @@ defmodule Nitro.Live.Examples.RimShop.Server do
   running one example server at a time, as these demos are meant to be
   run; not fine for hosting two Nitro.Live example apps side by side
   without giving N2O per-listener routing, which is out of scope here.
+
+  `ws_path` (default `/ws`, see `Simple.Server`'s moduledoc for the full
+  explanation) is threaded through to all three shell routes below via
+  `Nitro.Live.Shell`, not just `/ws/[...]` itself -- every one of them
+  needs to agree, or the browser connects to the wrong path regardless of
+  which URL under `/rim-shop` it loaded from.
   """
 
   alias Nitro.Live.Examples.RimShop.Cx
 
   @listener :rim_shop_http
 
-  def start(port \\ 8081) do
+  def start(port \\ 8081, ws_path \\ "/ws") do
     Application.put_env(:n2o, :port, port)
     Application.put_env(:n2o, :app, :nitro)
     Application.put_env(:n2o, :routes, Nitro.Live.Examples.RimShop.Routes)
@@ -48,19 +54,18 @@ defmodule Nitro.Live.Examples.RimShop.Server do
     n2o_priv = :code.priv_dir(:n2o)
     nitro_js_priv = :code.priv_dir(:nitro) |> Path.join("js")
     static_priv = :code.priv_dir(:nitro) |> Path.join("static")
-    shell = to_charlist(Path.join(static_priv, "live.htm"))
 
     dispatch =
       :cowboy_router.compile([
         {:_,
          [
-           {"/ws/[...]", :n2o_cowboy, []},
+           {"#{ws_path}/[...]", :n2o_cowboy, []},
            {"/n2o/[...]", :cowboy_static, {:dir, n2o_priv}},
            {"/nitro-js/[...]", :cowboy_static, {:dir, to_charlist(nitro_js_priv)}},
            {"/static/[...]", :cowboy_static, {:dir, to_charlist(static_priv)}},
-           {"/rim-shop/[...]", :cowboy_static, {:file, shell}},
-           {"/rim-shop", :cowboy_static, {:file, shell}},
-           {"/", :cowboy_static, {:file, shell}}
+           {"/rim-shop/[...]", Nitro.Live.Shell, ws_path},
+           {"/rim-shop", Nitro.Live.Shell, ws_path},
+           {"/", Nitro.Live.Shell, ws_path}
          ]}
       ])
 

@@ -11,8 +11,8 @@
 <script>
 // bullet.js isn't vendored -- its client API is a deliberate drop-in for the
 // native WebSocket (onopen/onmessage/onclose/send), so n2o.js works
-// unmodified against a real WebSocket. binaryType must be arraybuffer for
-// $bert.on's ArrayBuffer check in n2o.js.
+// against a real WebSocket. binaryType must be arraybuffer for $bert.on's
+// ArrayBuffer check in n2o.js.
 function bullet(url) {
   var ws = new WebSocket(url);
   ws.binaryType = "arraybuffer";
@@ -23,9 +23,21 @@ function bullet(url) {
 <script src="/n2o/bert.js"></script>
 <script src="/n2o/ieee754.js"></script>
 <script src="/n2o/heart.js"></script>
-<script src="/n2o/n2o.js"></script>
+<!-- vendored, not the n2o hex package's own /n2o/n2o.js -- makes the
+     WebSocket connect path (hardcoded "/ws" upstream) configurable via
+     `wsPath`, see priv/static/vendor/n2o/n2o.js's header comment. -->
+<script src="/static/vendor/n2o/n2o.js"></script>
 <script src="/nitro-js/nitro.js"></script>
-<script>host = location.hostname; port = location.port; debug = true;</script>
+<script>
+host = location.hostname; port = location.port; debug = true;
+// %%WS_PATH%% is replaced server-side (Nitro.Live.Shell.render/1) with
+// whatever ws_path the server was started with -- see Server.start/2.
+// This file, served raw (cowboy_static, no templating), would leave the
+// literal marker here instead, which is deliberately loud -- a WS connect
+// to a URL containing "%%WS_PATH%%" fails visibly rather than silently
+// connecting to the wrong path.
+wsPath = "%%WS_PATH%%";
+</script>
 <script type="module" src="/static/nitro-live.js"></script>
 <script type="module">protos = [$bert]; N2O_start();</script>
 </body>

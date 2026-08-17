@@ -22,11 +22,20 @@ defmodule Nitro.Live.Examples.Simple.Server do
     acting as an HTTP *client* building a `Cookie:` request header from
     untrusted name/value pairs via `cow_cookie:cookie/1` (e.g. through
     `gun`). This app is a server only and never calls that function.
+
+  ## `ws_path`
+
+  Where `n2o_cowboy` (the actual WebSocket handler) is routed -- `/ws` by
+  default, matching `priv/static/vendor/n2o/n2o.js`'s own default. Change
+  it and the served `live.htm` (via `Nitro.Live.Shell`, not a raw static
+  file -- see its moduledoc) automatically gets a matching `wsPath`
+  templated in, so client and server can never drift out of sync just
+  from calling `start/2` with a non-default value.
   """
 
   @listener :nitro_live_http
 
-  def start(port \\ 8080) do
+  def start(port \\ 8080, ws_path \\ "/ws") do
     Application.put_env(:n2o, :port, port)
     Application.put_env(:n2o, :app, :nitro)
     Application.put_env(:n2o, :routes, Nitro.Live.Examples.Simple.Routes)
@@ -58,11 +67,11 @@ defmodule Nitro.Live.Examples.Simple.Server do
       :cowboy_router.compile([
         {:_,
          [
-           {"/ws/[...]", :n2o_cowboy, []},
+           {"#{ws_path}/[...]", :n2o_cowboy, []},
            {"/n2o/[...]", :cowboy_static, {:dir, n2o_priv}},
            {"/nitro-js/[...]", :cowboy_static, {:dir, to_charlist(nitro_js_priv)}},
            {"/static/[...]", :cowboy_static, {:dir, to_charlist(static_priv)}},
-           {"/", :cowboy_static, {:file, to_charlist(Path.join(static_priv, "live.htm"))}}
+           {"/", Nitro.Live.Shell, ws_path}
          ]}
       ])
 

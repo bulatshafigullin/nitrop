@@ -55,6 +55,10 @@ Key features:
   pages/URLs, not one single-page-app process switching views
 * Dev-only auto-reload (`Nitro.Live.Reload`) -- edit a `.ex` file, get a
   hot code swap and every connected browser reloading itself, no restart
+* Configurable WebSocket path -- the n2o hex package hardcodes `/ws`
+  client-side with no way to change it; a vendored fork plus
+  `Nitro.Live.Shell` make it a real `Server.start/2` option, client and
+  server templated from one source so they can't drift apart
 
 `lib/nitro/live/` adds a Phoenix.LiveView-style `mount/render/handle_event`
 lifecycle on top of nitro's own record/render pipeline: server-held state
@@ -123,6 +127,25 @@ event that lands on the *real* path only ever carries `:renamed`, never
 `:modified`.
 
     mix run scripts/run_server_dev.exs   # like run_server.exs, but auto-reloads on lib/ changes
+
+The WebSocket path a client connects to (`n2o.js`'s job) was hardcoded to
+`/ws` upstream in the n2o hex package, with no way to change it -- fine
+until you need to run behind a reverse proxy with its own path prefix, or
+just want it to not collide with something else. `priv/static/vendor/n2o/n2o.js`
+is a deliberately minimal fork (see its header comment for the full diff)
+pulling that into a `wsPath` global, given the exact same "declare a
+default, let the embedding page override it with a plain assignment"
+treatment n2o.js already gives `host`/`debug`/`persistent`. The harder
+half: `priv/static/live.htm` is normally served as a raw static file, so
+a *server* configured with a non-default path had no way to tell the
+*client* to match -- `Nitro.Live.Shell` serves it through a plain cowboy
+handler instead, templating a `%%WS_PATH%%` marker with whatever path the
+server actually wired `n2o_cowboy` under, so `Server.start(port, ws_path)`
+can never drift out of sync with what the browser tries to connect to.
+Verified for real: started a server with `ws_path = "/live-ws"`, confirmed
+in a live browser that `window.ws.url` was `ws://localhost:8080/live-ws/`
+and the whole app -- forms, toggles, PubSub broadcast -- worked normally
+over it.
 
 Demo modules live under `lib/nitro/live/examples/simple/`. To run the real
 Cowboy + N2O server they wire up:
