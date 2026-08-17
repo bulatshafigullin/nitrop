@@ -27,6 +27,7 @@ defmodule Nitro.Live.Examples.RimShop.Page do
   @root_id "root"
 
   def event(:init) do
+    Nitro.Live.Reload.watch()
     mount(route_params())
     tree = Runtime.render_root(@root_id)
     Runtime.push_patch(@root_id, tree)

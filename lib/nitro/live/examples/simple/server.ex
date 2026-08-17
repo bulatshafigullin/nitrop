@@ -31,10 +31,18 @@ defmodule Nitro.Live.Examples.Simple.Server do
     Application.put_env(:n2o, :app, :nitro)
     Application.put_env(:n2o, :routes, Nitro.Live.Examples.Simple.Routes)
     # Nitro.Live.PubSub.Protocol handles the {:nitro_live_broadcast, ...}
-    # messages Nitro.Live.PubSub.broadcast/2 sends -- without it in this
-    # list, a broadcast still runs (nothing errors), it just never reaches
-    # any browser. See its moduledoc.
-    Application.put_env(:n2o, :protocols, [:n2o_heart, :nitro_n2o, Nitro.Live.PubSub.Protocol])
+    # messages Nitro.Live.PubSub.broadcast/2 sends, Nitro.Live.Reload.Protocol
+    # the :nitro_live_reload one Nitro.Live.Reload's file watcher sends --
+    # without either in this list, nothing errors, the signal just never
+    # reaches a browser. See their moduledocs. Reload's watcher itself is
+    # NOT started here -- see scripts/run_server_dev.exs -- so this alone
+    # doesn't turn on auto-reload, just makes it possible to.
+    Application.put_env(:n2o, :protocols, [
+      :n2o_heart,
+      :nitro_n2o,
+      Nitro.Live.PubSub.Protocol,
+      Nitro.Live.Reload.Protocol
+    ])
     Application.put_env(:n2o, :session, :n2o_session)
     Application.put_env(:n2o, :formatter, :n2o_bert)
     Application.put_env(:n2o, :origin, "*")

@@ -4,6 +4,10 @@ defmodule Nitro.Live.Examples.Simple.Page do
   Implements the `event/1` contract nitro_n2o.erl calls directly
   (`Module:event(init)` on websocket connect, `Delegate:event(Postback)` on
   every click -- see nitro_n2o.erl's `render_ev/4`).
+
+  Opts every connection into `Nitro.Live.Reload` -- a safe no-op unless
+  something (dev tooling only, see its moduledoc) called
+  `Nitro.Live.Reload.start/1` for this run.
   """
 
   require N2O
@@ -12,6 +16,7 @@ defmodule Nitro.Live.Examples.Simple.Page do
   @root_module Nitro.Live.Examples.Simple.Dashboard
 
   def event(:init) do
+    Nitro.Live.Reload.watch()
     Nitro.Live.Runtime.mount(@root_module, @root_id, %{}, session_id())
     tree = Nitro.Live.Runtime.render_root(@root_id)
     Nitro.Live.Runtime.push_patch(@root_id, tree)

@@ -33,7 +33,11 @@ defmodule Nitro.Live.Examples.RimShop.Server do
     Application.put_env(:n2o, :app, :nitro)
     Application.put_env(:n2o, :routes, Nitro.Live.Examples.RimShop.Routes)
     Application.put_env(:n2o, :cx, {Cx, :cx})
-    Application.put_env(:n2o, :protocols, [:n2o_heart, :nitro_n2o])
+    # Nitro.Live.Reload.Protocol handles the :nitro_live_reload message
+    # Nitro.Live.Reload's file watcher sends -- see its moduledoc. Reload's
+    # watcher itself is NOT started here, so this alone doesn't turn on
+    # auto-reload, just makes it possible to (see scripts/run_server_dev.exs).
+    Application.put_env(:n2o, :protocols, [:n2o_heart, :nitro_n2o, Nitro.Live.Reload.Protocol])
     Application.put_env(:n2o, :session, :n2o_session)
     Application.put_env(:n2o, :formatter, :n2o_bert)
     Application.put_env(:n2o, :origin, "*")

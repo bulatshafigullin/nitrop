@@ -34,7 +34,8 @@ defmodule NITRO.Mixfile do
     [
       {:ex_doc, ">= 0.0.0", only: :dev, runtime: false},
       {:n2o, "~> 13.4"},
-      {:cowboy, "~> 2.10"}
+      {:cowboy, "~> 2.10"},
+      {:fs, "~> 11.4", only: :dev, runtime: false}
     ]
   end
 end

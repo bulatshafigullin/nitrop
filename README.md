@@ -53,6 +53,8 @@ Key features:
   reload, no reconnect
 * A real multi-page routing example (`rim_shop`) -- genuinely separate
   pages/URLs, not one single-page-app process switching views
+* Dev-only auto-reload (`Nitro.Live.Reload`) -- edit a `.ex` file, get a
+  hot code swap and every connected browser reloading itself, no restart
 
 `lib/nitro/live/` adds a Phoenix.LiveView-style `mount/render/handle_event`
 lifecycle on top of nitro's own record/render pipeline: server-held state
@@ -104,6 +106,23 @@ doesn't do (no state-on-join), and
 `Nitro.Live.Examples.Simple.SharedCounter` for it live: open the same
 page in two tabs, `+1` in one, watch the other update with zero
 interaction.
+
+`Nitro.Live.Reload` is dev-only auto-reload, built on
+[synrc/fs](https://github.com/synrc/fs) (native OS file watcher --
+fsevent/inotify/inotify-win, an `only: :dev` dependency): save any
+`.ex`/`.exs` file and it's recompiled in place (`Code.compile_file/1`, a
+real hot code swap, no server restart) and every connected browser that
+opted in reloads on its own. `Nitro.Live.Reload.start/1` from dev-only
+startup code, `Nitro.Live.Reload.watch/0` from a page's `event(:init)`
+(already wired into `Simple.Page`/`RimShop.Page`; a safe no-op unless
+`start/1` was called), `Nitro.Live.Reload.Protocol` in
+`Application.put_env(:n2o, :protocols, [...])`. See its moduledoc for the
+one real subtlety this needed to get right: many editors write a temp
+file and rename it over the target rather than writing in place, so the
+event that lands on the *real* path only ever carries `:renamed`, never
+`:modified`.
+
+    mix run scripts/run_server_dev.exs   # like run_server.exs, but auto-reloads on lib/ changes
 
 Demo modules live under `lib/nitro/live/examples/simple/`. To run the real
 Cowboy + N2O server they wire up:
