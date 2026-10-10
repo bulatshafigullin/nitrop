@@ -7,7 +7,7 @@ defmodule Nitro.Live.PubSub.Protocol do
   connection subscribed to that topic, and pushes ONE combined patch
   covering all of them.
 
-  Must be added to `Application.put_env(:n2o, :protocols, [...])` (see
+  Must be added to the `:protocols` option of `Nitro.Live.Site` (`[...]`) (see
   `Nitro.Live.Examples.Simple.Server`) -- cowboy only ever calls
   `websocket_info/2` for an Erlang message sent to a connection process,
   and N2O only routes that through whichever modules are in the configured

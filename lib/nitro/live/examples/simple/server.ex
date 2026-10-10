@@ -36,25 +36,17 @@ defmodule Nitro.Live.Examples.Simple.Server do
   @listener :nitro_live_http
 
   def start(port \\ 8080, ws_path \\ "/ws") do
-    Application.put_env(:n2o, :port, port)
-    Application.put_env(:n2o, :app, :nitro)
-    Application.put_env(:n2o, :routes, Nitro.Live.Examples.Simple.Routes)
-    # Nitro.Live.PubSub.Protocol handles the {:nitro_live_broadcast, ...}
-    # messages Nitro.Live.PubSub.broadcast/2 sends, Nitro.Live.Reload.Protocol
-    # the :nitro_live_reload one Nitro.Live.Reload's file watcher sends --
-    # without either in this list, nothing errors, the signal just never
-    # reaches a browser. See their moduledocs. Reload's watcher itself is
-    # NOT started here -- see scripts/run_server_dev.exs -- so this alone
-    # doesn't turn on auto-reload, just makes it possible to.
-    Application.put_env(:n2o, :protocols, [
-      :n2o_heart,
-      :nitro_n2o,
-      Nitro.Live.PubSub.Protocol,
-      Nitro.Live.Reload.Protocol
-    ])
+    # Per-site config (routes, protocols, origin) goes to Nitro.Live.Site as
+    # route options below, not the global :n2o env, so several sites can share
+    # one VM. Nitro.Live.PubSub.Protocol handles the
+    # {:nitro_live_broadcast, ...} messages Nitro.Live.PubSub.broadcast/2
+    # sends, Nitro.Live.Reload.Protocol the :nitro_live_reload one
+    # Nitro.Live.Reload's file watcher sends -- without either in the
+    # protocols list, nothing errors, the signal just never reaches a
+    # browser. Reload's watcher itself is NOT started here -- see
+    # scripts/run_server_dev.exs.
     Application.put_env(:n2o, :session, :n2o_session)
     Application.put_env(:n2o, :formatter, :n2o_bert)
-    Application.put_env(:n2o, :origin, "*")
 
     {:ok, _} = Application.ensure_all_started(:n2o)
     {:ok, _} = Application.ensure_all_started(:nitro)
@@ -67,7 +59,17 @@ defmodule Nitro.Live.Examples.Simple.Server do
       :cowboy_router.compile([
         {:_,
          [
-           {"#{ws_path}/[...]", :n2o_cowboy, []},
+           {"#{ws_path}/[...]", Nitro.Live.Site,
+            [
+              routes: Nitro.Live.Examples.Simple.Routes,
+              protocols: [
+                :n2o_heart,
+                :nitro_n2o,
+                Nitro.Live.PubSub.Protocol,
+                Nitro.Live.Reload.Protocol
+              ],
+              origin: "*"
+            ]},
            {"/n2o/[...]", :cowboy_static, {:dir, n2o_priv}},
            {"/nitro-js/[...]", :cowboy_static, {:dir, to_charlist(nitro_js_priv)}},
            {"/static/[...]", :cowboy_static, {:dir, to_charlist(static_priv)}},

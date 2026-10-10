@@ -101,7 +101,7 @@ triggered it. `subscribe/2` in `mount/2`, `broadcast/2` from
 `handle_event/3` (a subscribing module updates its own assigns in the new
 optional `handle_info/2` callback instead, uniformly for every
 subscriber including itself), and `Nitro.Live.PubSub.Protocol` -- a new
-N2O protocol module, added to `Application.put_env(:n2o, :protocols, [...])`
+N2O protocol module, added to the `:protocols` option of `Nitro.Live.Site`
 -- delivers it: cowboy's `websocket_info/2` is the hook for a server to
 push an unsolicited frame to a client at any time, not just in response
 to that client's own request. See its moduledoc for the mechanism (a
@@ -120,13 +120,20 @@ opted in reloads on its own. `Nitro.Live.Reload.start/1` from dev-only
 startup code, `Nitro.Live.Reload.watch/0` from a page's `event(:init)`
 (already wired into `Simple.Page`/`RimShop.Page`; a safe no-op unless
 `start/1` was called), `Nitro.Live.Reload.Protocol` in
-`Application.put_env(:n2o, :protocols, [...])`. See its moduledoc for the
+`Nitro.Live.Site`'s `:protocols`. See its moduledoc for the
 one real subtlety this needed to get right: many editors write a temp
 file and rename it over the target rather than writing in place, so the
 event that lands on the *real* path only ever carries `:renamed`, never
 `:modified`.
 
     mix run scripts/run_server_dev.exs   # like run_server.exs, but auto-reloads on lib/ changes
+
+`Nitro.Live.Site` is the WebSocket handler to route instead of `n2o_cowboy`.
+N2O reads `routes`, `protocols`, `origin` and `cx` from the global `:n2o`
+app env, so only one site could run per BEAM VM. `Site` takes them as
+cowboy route options (`{"/ws/[...]", Nitro.Live.Site, routes: MyRoutes,
+protocols: [...], cx: {Mod, :cx}, origin: "*"}`), so any number of sites
+can share a VM. `session`, `formatter` and `pickler` stay VM-wide.
 
 The WebSocket path a client connects to (`n2o.js`'s job) was hardcoded to
 `/ws` upstream in the n2o hex package, with no way to change it -- fine

@@ -25,7 +25,7 @@ defmodule Nitro.Live.Reload do
      never called (production / no dev tooling) -- checks the registry
      exists first rather than crashing when it doesn't.
   3. `Nitro.Live.Reload.Protocol` -- add to
-     `Application.put_env(:n2o, :protocols, [...])` for a `watch/0`'d
+     the `:protocols` option of `Nitro.Live.Site` (`[...]`) for a `watch/0`'d
      connection to actually receive the reload command; without it in the
      list, same as `Nitro.Live.PubSub.Protocol`, nothing errors, the
      signal just never reaches a browser.

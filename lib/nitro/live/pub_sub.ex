@@ -17,7 +17,7 @@ defmodule Nitro.Live.PubSub do
   websocket machinery to do anything: `Nitro.Live.PubSub.Protocol` is an
   N2O protocol module (same contract as `n2o_heart`/`nitro_n2o`, see its
   moduledoc) that recognizes that message shape, and must be added to
-  `Application.put_env(:n2o, :protocols, [..., Nitro.Live.PubSub.Protocol])`
+  the `:protocols` option of `Nitro.Live.Site` (`[..., Nitro.Live.PubSub.Protocol]`)
   for broadcasts to have any effect (see `Simple.Server`) -- subscribing
   without that wired up silently never patches anything.
 
